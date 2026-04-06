@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text-to-SQL 性能与成本全维度看板 - V4.2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        body { background-color: #f8fafc; font-family: 'Inter', 'Source Han Sans CN', sans-serif; }
+        .chart-container { height: 450px; width: 100%; }
+        .spotlight-container { height: 450px; width: 100%; }
+        .card { background: white; border-radius: 1rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+    </style>
+</head>
+<body class="p-4 md:p-8 text-slate-900">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-2 border-slate-900 pb-6">
+            <div>
+                <h1 class="text-3xl font-black text-slate-900 tracking-tight italic">📊 Text-to-SQL 性能与成本分析 <span class="text-blue-600 text-lg font-normal ml-2">v4.2 (Line-Cost Focus)</span></h1>
+                <p class="text-slate-600 mt-1 text-sm font-bold uppercase tracking-wider underline decoration-indigo-500 decoration-2">Accuracy (Bars) & Token Consumption (Lines)</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="px-3 py-1 bg-blue-600 text-white text-[10px] font-black rounded shadow">ACC: BAR</div>
+                <div class="px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded shadow">TOKEN: LINE</div>
+            </div>
+        </div>
+
+        <!-- Top Row: Overview & Trends -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <div class="card p-6">
+                <h2 class="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">
+                    <span class="w-2 h-6 bg-blue-600"></span> 全模型全表性能与成本对比
+                </h2>
+                <div id="barChart" class="chart-container"></div>
+            </div>
+
+            <div class="card p-6">
+                <h2 class="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">
+                    <span class="w-2 h-6 bg-emerald-600"></span> 表数量维度执行准确率趋势
+                </h2>
+                <div id="lineChart" class="chart-container"></div>
+            </div>
+        </div>
+
+        <!-- Bottom Row: The ICL Spotlight (Performance UP, Token DOWN) -->
+        <div class="card p-8 border-t-8 border-t-emerald-600">
+            <div class="mb-6 text-center md:text-left">
+                <h2 class="text-2xl font-black text-slate-900">ICL 组件效能专项：27B & 30B Coder 演进趋势</h2>
+                <p class="text-emerald-700 font-bold text-sm mt-1 uppercase tracking-widest italic">Visualizing the "Cost-Efficiency Inversion" - Accuracy UP, Tokens DOWN</p>
+            </div>
+            
+            <!-- This Chart combines Bars for Acc and Lines for Tokens -->
+            <div id="iclEvolutionChart" class="spotlight-container"></div>
+
+            <!-- Conclusion Grid -->
+            <div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="flex items-start gap-4 bg-emerald-50 p-5 rounded-xl border-2 border-emerald-200">
+                    <div class="text-4xl text-emerald-600">⬆️</div>
+                    <div>
+                        <div class="font-black text-emerald-900 text-lg uppercase">性能激增 (Accuracy)</div>
+                        <p class="text-sm text-emerald-800 font-bold leading-relaxed mt-1">
+                            27B 通过 ICL 实现了从 52.3% 到 66.9% 的跨越；30B Coder 提升幅度达 12.3%。
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-4 bg-slate-900 p-5 rounded-xl border-2 border-slate-700 text-white shadow-xl">
+                    <div class="text-4xl text-slate-100">⬇️</div>
+                    <div>
+                        <div class="font-black text-slate-100 text-lg uppercase italic">成本骤降 (Tokens)</div>
+                        <p class="text-sm text-slate-300 font-bold leading-relaxed mt-1">
+                            27B 使用 ICL 后，生成的代码更精准、更短，单次对话平均节省了 802 Tokens，效率优化显著。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Init Charts ---
+        const barChart = echarts.init(document.getElementById('barChart'));
+        const lineChart = echarts.init(document.getElementById('lineChart'));
+        const iclEvoChart = echarts.init(document.getElementById('iclEvolutionChart'));
+
+        // --- Data ---
+        const models = ['4B', '4B Pro', '4B ProMax', '30B Coder', 'KIMI K25', '27B', 'SQL_dog'];
+        const baseValues = [0.415, 0.494, 0.523, 0.516, 0, 0.523, 0.527];
+        const iclGains = [0, 0, 0, 0.123, 0.686, 0.146, 0];
+        const consisGains = [0.061, 0.109, 0.112, 0.005, 0, 0, 0.083];
+        const tokenValues = [588.37, 359.48, 365.90, 643.46, 2509.44, 4098.57, 460.91];
+
+        // --- 1. Main Overview Chart ---
+        barChart.setOption({
+            tooltip: { 
+                trigger: 'axis', axisPointer: {type:'cross'}, 
+                backgroundColor:'rgba(255,255,255,0.98)', 
+                textStyle:{color:'#000', fontWeight:'bold'},
+                borderColor: '#000'
+            },
+            legend: { bottom: 0, icon:'circle', textStyle:{fontWeight:'bold'} },
+            grid: { top:'12%', left:'3%', right:'10%', bottom:'15%', containLabel:true },
+            xAxis: { type:'category', data:models, axisLabel:{rotate:25, fontWeight:'black', fontSize:12} },
+            yAxis: [
+                { type:'value', name:'Accuracy', min:0.3, max:0.8, axisLabel:{color:'#2563eb', fontWeight:'black'}, splitLine:{lineStyle:{type:'dashed'}} },
+                { type:'value', name:'Tokens', axisLabel:{color:'#000', fontWeight:'black'} }
+            ],
+            series: [
+                { name:'Baseline (n=1)', type:'bar', stack:'acc', data:baseValues, itemStyle:{color:'#2563eb'}, barWidth:'40%' },
+                { name:'ICL / Native ICL', type:'bar', stack:'acc', data:iclGains, itemStyle:{color:'#059669'} },
+                { name:'Consistency (n=8)', type:'bar', stack:'acc', data:consisGains, itemStyle:{color:'#d97706', borderRadius:[4,4,0,0]} },
+                { 
+                    name:'Avg Token/Question', type:'line', yAxisIndex:1, data:tokenValues, smooth:true, 
+                    symbolSize:10, itemStyle:{color:'#0f172a'}, lineStyle:{width:4}, 
+                    label:{show:true, position:'top', fontWeight:'black', backgroundColor:'#fff', padding:[2,4], borderRadius:4, color:'#000'} 
+                }
+            ]
+        });
+
+        // --- 2. Trend Chart ---
+        lineChart.setOption({
+            tooltip: { trigger:'axis' },
+            legend: { type:'scroll', top:0, textStyle:{fontWeight:'bold'} },
+            grid: { top:'15%', bottom:'10%', left:'3%', right:'5%', containLabel:true },
+            xAxis: { type:'category', boundaryGap:false, data:['Single','Two','Three','Four','Five+'], axisLabel:{fontWeight:'bold'} },
+            yAxis: { type:'value', min:0.1, axisLabel:{fontWeight:'bold'}, splitLine:{lineStyle:{type:'dashed'}} },
+            series: [
+                { name:'4B ProMax n=8', type:'line', data:[0.898,0.745,0.564,0.366,0.727], smooth:true, lineStyle:{width:4} },
+                { name:'30B Coder ICL n=8', type:'line', data:[0.906,0.803,0.564,0.354,0.364], smooth:true, lineStyle:{width:3} },
+                { name:'KIMI K25 ICL n=1', type:'line', data:[0.977,0.798,0.651,0.354,0.727], smooth:true, lineStyle:{width:5, color:'#059669'} },
+                { name:'27B ICL n=1', type:'line', data:[0.906,0.803,0.615,0.372,0.727], smooth:true, lineStyle:{width:3} },
+                { name:'SQL_dog n=8', type:'line', data:[0.875,0.721,0.531,0.35,0.727], smooth:true }
+            ]
+        });
+
+        // --- 3. ICL Evolution Spotlight (Combo Chart) ---
+        // X-axis will be: [30B Base, 30B ICL, 27B Base, 27B ICL]
+        iclEvoChart.setOption({
+            tooltip: { 
+                trigger: 'axis', axisPointer: {type: 'shadow'},
+                formatter: (params) => {
+                    let html = `<div style="font-weight:900; border-bottom:1px solid #ccc; margin-bottom:5px">${params[0].axisValue}</div>`;
+                    params.forEach(p => {
+                        html += `<div style="display:flex; justify-content:space-between; gap:20px">
+                                    <span>${p.marker} ${p.seriesName}</span>
+                                    <b>${p.value}</b>
+                                 </div>`;
+                    });
+                    return html;
+                }
+            },
+            legend: { top: 0, textStyle: { fontWeight:'black'} },
+            grid: { left: '3%', right: '8%', bottom: '10%', top:'15%', containLabel: true },
+            xAxis: { 
+                type: 'category', 
+                data: ['30B Base', '30B + ICL', '27B Base', '27B + ICL'],
+                axisLabel: { fontWeight: 'black', fontSize: 13, rotate: 0 }
+            },
+            yAxis: [
+                { type: 'value', name: 'Accuracy', min: 0.4, max: 0.75, axisLabel: { color: '#2563eb', fontWeight:'black' }, splitLine:{lineStyle:{type:'dashed'}} },
+                { type: 'value', name: 'Tokens', axisLabel: { color: '#000', fontWeight:'black' }, splitLine: {show:false} }
+            ],
+            series: [
+                {
+                    name: 'Execution Accuracy',
+                    type: 'bar',
+                    barWidth: '50%',
+                    data: [0.516, 0.639, 0.523, 0.669],
+                    itemStyle: {
+                        color: function(params) {
+                            return params.dataIndex % 2 === 0 ? '#3b82f6' : '#059669';
+                        }
+                    },
+                    label: { show: true, position: 'top', fontWeight: 'black', color: '#000', formatter: (p) => (p.value * 100).toFixed(1) + '%' }
+                },
+                {
+                    name: 'Token Consumption',
+                    type: 'line',
+                    yAxisIndex: 1,
+                    data: [643.46, 592.96, 4098.57, 3296.62],
+                    smooth: false,
+                    symbol: 'diamond',
+                    symbolSize: 15,
+                    lineStyle: { width: 5, color: '#0f172a' },
+                    itemStyle: { color: '#0f172a', borderWidth: 2, borderColor: '#fff' },
+                    label: { 
+                        show: true, position: 'top', fontWeight: 'black', 
+                        backgroundColor: '#000', color: '#fff', padding: [4, 8], borderRadius: 4,
+                        formatter: '{c} tks'
+                    }
+                }
+            ]
+        });
+
+        window.addEventListener('resize', () => {
+            barChart.resize(); lineChart.resize(); iclEvoChart.resize();
+        });
+    </script>
+</body>
+</html>
