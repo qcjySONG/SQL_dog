@@ -1,11 +1,11 @@
-# SQL_dog：从模型训练到产品搭建——迈向Text-to-sql第一步
+# SQL_Gog：从模型训练到产品搭建——迈向NL2SSQL第一步
 ![SQL_Dog项目介绍](https://raw.githubusercontent.com/qcjySONG/SQL_dog/main/assets/ind.png)
 ## 介绍
 
 >此为本人的个人项目，完全由本人一个人完成。
 - **训练：**cd model_train
-- **网站（前后端代码完全由AI生成）：**cd SQL_dog_web
-- 性能介绍：[SQL_dog对比页面](SQL_dog_Comparison.html)
+- **网站（前后端代码完全由AI生成）：**cd SQL_Dog_Web
+- 性能介绍：[SQL_dog对比页面](SQL_dog_Comparison_V2.html)
 
 此仓库放置了多款模型，这些模型通过在**Qwen3-4B-Instruct-2507**上后训练而来，其主要是服务MIMIC系列数据库的Text-to-Sql任务而生的。其中SQL_Dog_DPO模型为完全由合成数据训练而来的多轮问答模型，其余模型则为单轮问答而生。具体性能如下：
 
