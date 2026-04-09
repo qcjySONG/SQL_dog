@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual Environment
+envs/
+venv/
+.venv/
+
+# Database files (too large)
+DB/
+*.sqlite
+*.db
+
+# DDL cache
+ddl_cache/
+
+# Conversation history (contains user data)
+conversations/
+
+# Environment files with secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Assets (optional, can be kept if small)
+# assets/
+
+# Frontend gradio cache
+.gradio/
+
+# Test files (optional)
+# test_*.py
+
+# Requirements - keep only requirements.txt
+requirements-local.txt
+
+# Any generated logs
+*.log
+logs/

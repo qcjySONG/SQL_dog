@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text-to-SQL 性能与成本全维度看板 - V4.3</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        body { background-color: #f8fafc; font-family: 'Inter', 'Source Han Sans CN', sans-serif; }
+        .chart-container { height: 400px; width: 100%; }
+        .spotlight-container { height: 450px; width: 100%; }
+        .card { background: white; border-radius: 1rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transition: all 0.3s ease; }
+        .card:hover { box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
+    </style>
+</head>
+<body class="p-4 md:p-8 text-slate-900">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-2 border-slate-900 pb-6">
+            <div>
+                <h1 class="text-3xl font-black text-slate-900 tracking-tight italic">📊 Text-to-SQL 性能与成本分析 <span class="text-blue-600 text-lg font-normal ml-2">v4.3 (Strategy & Selection)</span></h1>
+                <p class="text-slate-600 mt-1 text-sm font-bold uppercase tracking-wider underline decoration-indigo-500 decoration-2">From Upstream Table Selection to Downstream Generation</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="px-3 py-1 bg-blue-600 text-white text-[10px] font-black rounded shadow">ACC: BAR</div>
+                <div class="px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded shadow">TOKEN: LINE</div>
+            </div>
+        </div>
+
+        <!-- NEW SECTION: Table Selector Performance -->
+        <div class="card p-6 mb-8 border-l-8 border-l-indigo-600">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                <div>
+                    <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+                        <span class="w-2 h-6 bg-indigo-600"></span> 关键前置：表选择器 (Table Selector) 性能对标
+                    </h2>
+                    <p class="text-slate-500 text-sm font-bold mt-1">对比 Naive 方案与两代 Table Selector 的检索质量</p>
+                </div>
+                <div class="bg-indigo-50 px-4 py-2 rounded-lg border border-indigo-100">
+                    <span class="text-xs font-black text-indigo-700 uppercase italic">V2 Logic: High Precision + High Recall</span>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2">
+                    <div id="tableSelectorChart" class="chart-container"></div>
+                </div>
+                <div class="flex flex-col justify-center gap-4">
+                    <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                        <div class="text-xs font-black text-slate-500 uppercase italic">V2 核心突破</div>
+                        <div class="text-2xl font-black text-indigo-600 mt-1">95.34%</div>
+                        <div class="text-sm font-bold text-slate-700">严格召回率 (Strict Recall)</div>
+                        <p class="text-xs text-slate-500 mt-2 leading-relaxed">彻底解决 Naive 方案中 45% 的表遗漏问题，同时保持了极高的精确率，显著降低输入 Token 冗余。</p>
+                    </div>
+                    <div class="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                        <div class="text-xs font-black text-emerald-600 uppercase italic">Precision Boost</div>
+                        <div class="text-2xl font-black text-emerald-700 mt-1">+14.8%</div>
+                        <div class="text-sm font-bold text-emerald-800">相对于 V1 的精确率提升</div>
+                        <p class="text-xs text-emerald-600 mt-2 font-medium">V2 通过深度语义过滤，有效排除了无关表的干扰。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle Row: Overview & Trends -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <div class="card p-6">
+                <h2 class="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">
+                    <span class="w-2 h-6 bg-blue-600"></span> 全模型性能与 Token 成本对比
+                </h2>
+                <div id="barChart" class="chart-container"></div>
+            </div>
+
+            <div class="card p-6">
+                <h2 class="text-xl font-black text-slate-800 mb-4 flex items-center gap-2">
+                    <span class="w-2 h-6 bg-emerald-600"></span> 表数量维度执行准确率趋势
+                </h2>
+                <div id="lineChart" class="chart-container"></div>
+            </div>
+        </div>
+
+        <!-- Bottom Row: ICL Evolution -->
+        <div class="card p-8 border-t-8 border-t-emerald-600">
+            <div class="mb-6 text-center md:text-left">
+                <h2 class="text-2xl font-black text-slate-900">ICL 组件效能专项：27B & 30B Coder 演进趋势</h2>
+                <p class="text-emerald-700 font-bold text-sm mt-1 uppercase tracking-widest italic">Accuracy UP, Tokens DOWN via In-Context Learning</p>
+            </div>
+            <div id="iclEvolutionChart" class="spotlight-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- Init Charts ---
+        const tableSelectorChart = echarts.init(document.getElementById('tableSelectorChart'));
+        const barChart = echarts.init(document.getElementById('barChart'));
+        const lineChart = echarts.init(document.getElementById('lineChart'));
+        const iclEvoChart = echarts.init(document.getElementById('iclEvolutionChart'));
+
+        // --- 1. Table Selector Chart ---
+        tableSelectorChart.setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            legend: { top: 0, icon: 'roundRect', textStyle: { fontWeight: 'bold' } },
+            grid: { left: '3%', right: '4%', bottom: '5%', top: '15%', containLabel: true },
+            xAxis: { 
+                type: 'category', 
+                data: ['NaiveTabSelect', 'Table Selector V1', 'Table Selector V2'],
+                axisLabel: { fontWeight: 'black' }
+            },
+            yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%', fontWeight: 'bold' } },
+            series: [
+                {
+                    name: 'Precision',
+                    type: 'bar',
+                    data: [83.33, 80.91, 95.78],
+                    itemStyle: { color: '#6366f1' },
+                    label: { show: true, position: 'top', formatter: '{c}%', fontWeight: 'bold' }
+                },
+                {
+                    name: 'Recall',
+                    type: 'bar',
+                    data: [79.92, 98.20, 98.35],
+                    itemStyle: { color: '#10b981' },
+                    label: { show: true, position: 'top', formatter: '{c}%', fontWeight: 'bold' }
+                },
+                {
+                    name: 'Strict Recall',
+                    type: 'bar',
+                    data: [55.53, 95.11, 95.34],
+                    itemStyle: { color: '#f59e0b' },
+                    label: { show: true, position: 'top', formatter: '{c}%', fontWeight: 'bold' }
+                }
+            ]
+        });
+
+        // --- 2. Main Overview Chart Data ---
+        const models = ['4B', '4B Pro', '4B ProMax', '30B Coder', 'KIMI K25', '27B', 'SQL_dog'];
+        const baseValues = [0.415, 0.494, 0.523, 0.516, 0, 0.523, 0.527];
+        const iclGains = [0, 0, 0, 0.123, 0.686, 0.146, 0];
+        const consisGains = [0.061, 0.109, 0.112, 0.005, 0, 0, 0.083];
+        const tokenValues = [588.37, 359.48, 365.90, 643.46, 2509.44, 4098.57, 460.91];
+
+        barChart.setOption({
+            tooltip: { trigger: 'axis', axisPointer: {type:'cross'}},
+            legend: { bottom: 0, icon:'circle', textStyle:{fontWeight:'bold'} },
+            grid: { top:'12%', left:'3%', right:'10%', bottom:'15%', containLabel:true },
+            xAxis: { type:'category', data:models, axisLabel:{rotate:25, fontWeight:'black'} },
+            yAxis: [
+                { type:'value', name:'Accuracy', min:0, max:1, axisLabel:{fontWeight:'black'} },
+                { type:'value', name:'Tokens', axisLabel:{fontWeight:'black'} }
+            ],
+            series: [
+                { name:'Baseline', type:'bar', stack:'acc', data:baseValues, itemStyle:{color:'#2563eb'} },
+                { name:'ICL', type:'bar', stack:'acc', data:iclGains, itemStyle:{color:'#059669'} },
+                { name:'Consistency', type:'bar', stack:'acc', data:consisGains, itemStyle:{color:'#d97706'} },
+                { name:'Avg Token', type:'line', yAxisIndex:1, data:tokenValues, smooth:true, itemStyle:{color:'#0f172a'}, lineStyle:{width:4} }
+            ]
+        });
+
+        // --- 3. Trend Chart ---
+        lineChart.setOption({
+            tooltip: { trigger:'axis' },
+            legend: { type:'scroll', top:0, textStyle:{fontWeight:'bold'} },
+            grid: { top:'15%', bottom:'10%', left:'3%', right:'5%', containLabel:true },
+            xAxis: { type:'category', boundaryGap:false, data:['Single','Two','Three','Four','Five+'], axisLabel:{fontWeight:'bold'} },
+            yAxis: { type:'value', min:0.1, axisLabel:{fontWeight:'bold'} },
+            series: [
+                { name:'4B ProMax n=8', type:'line', data:[0.898,0.745,0.564,0.366,0.727], smooth:true, lineStyle:{width:4} },
+                { name:'30B Coder ICL n=8', type:'line', data:[0.906,0.803,0.564,0.354,0.364], smooth:true },
+                { name:'KIMI K25 ICL n=1', type:'line', data:[0.977,0.798,0.651,0.354,0.727], smooth:true, lineStyle:{width:5} },
+                { name:'27B ICL n=1', type:'line', data:[0.906,0.803,0.615,0.372,0.727], smooth:true }
+            ]
+        });
+
+        // --- 4. ICL Evolution ---
+        iclEvoChart.setOption({
+            tooltip: { trigger: 'axis' },
+            legend: { top: 0, textStyle: { fontWeight:'black'} },
+            grid: { left: '3%', right: '8%', bottom: '10%', top:'15%', containLabel: true },
+            xAxis: { type: 'category', data: ['30B Base', '30B + ICL', '27B Base', '27B + ICL'], axisLabel: { fontWeight: 'black'} },
+            yAxis: [
+                { type: 'value', name: 'Accuracy', min: 0.4, max: 0.75, axisLabel: { color: '#2563eb' } },
+                { type: 'value', name: 'Tokens', axisLabel: { color: '#000' } }
+            ],
+            series: [
+                { name: 'Execution Accuracy', type: 'bar', barWidth: '40%', data: [0.516, 0.639, 0.523, 0.669], itemStyle: { color: '#059669'} },
+                { name: 'Token Consumption', type: 'line', yAxisIndex: 1, data: [643.46, 592.96, 4098.57, 3296.62], smooth: false, symbolSize: 12, lineStyle: { width: 5, color: '#0f172a' } }
+            ]
+        });
+
+        window.addEventListener('resize', () => {
+            tableSelectorChart.resize(); barChart.resize(); lineChart.resize(); iclEvoChart.resize();
+        });
+    </script>
+</body>
+</html>

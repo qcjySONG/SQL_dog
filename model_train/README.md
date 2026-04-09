@@ -37,6 +37,10 @@ uv pip install modelscope
 modelscope download --model GDUTSONG/SQL_Dog_DPO \
     --local_dir ./MODEL/SQL_Dog_DPO
 
+# 启动VLLM，请更换对应模型名字或者根据显卡情况调整：--gpu-memory-utilization的比例
+bash vllm_start.sh
+
+# 开始测评
 python Evaluation_EHR.py
 ```
 
@@ -75,3 +79,15 @@ TBD，待定
 ## 工程落地
 - 参考DB-GPT，XIYAN-SQL，他们人多力量大，顶得住大家压力，这个仓库并没有做好工程的想法。
 - 但是我仍然建议大家做好了数据治理才考虑接入LLM，就和RAG一样，需要做好前序的文档整理才去考虑召回率准确率。
+
+## 性能与模型下载地址
+| 模型名称 (Model) | Baseline (n=1) | ICL  | 自一致性 | **最终执行总分** | **平均消耗 (Tokens/Q)** |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **[4B](https://www.modelscope.cn/models/Qwen/Qwen3-4B-Instruct-2507)** | 41.50 | - | 47.60 (+6.10) | **47.60** | 588.37 |
+| **[4B Pro](https://www.modelscope.cn/models/GDUTSONG/4B_Pro)** | 49.40 | - | 60.30 (+10.90) | **60.30** | 359.48 |
+| **[4B ProMax](https://www.modelscope.cn/models/GDUTSONG/4B_ProMax)** | 52.30 | - | 63.50 (+11.20) | **63.50** | 365.90 |
+| **[30B Coder](https://www.modelscope.cn/models/Qwen/Qwen3-Coder-30B-A3B-Instruct)** | 51.60 | 63.90 (+12.30) | 64.40 (+0.50) | **64.40** | 643.46 |
+| **[KIMI K25(Thinking)](https://www.modelscope.cn/models/moonshotai/Kimi-K2.5)** | - | 68.60 (Native) | - | **68.60** | 2,509.44 |
+| **[QWEN3.5-27B(Thinking)](https://www.modelscope.cn/models/Qwen/Qwen3.5-27B)** | 52.30 | 66.90 (+14.60) | - | **66.90** | 4,098.57 |
+| **[SQL_Dog_DPO](https://www.modelscope.cn/models/GDUTSONG/SQL_Dog_DPO)** | 52.70 | - | 61.00 (+8.30) | **61.00** | 460.91 |
+

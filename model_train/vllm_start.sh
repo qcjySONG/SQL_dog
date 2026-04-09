@@ -26,7 +26,7 @@ trap cleanup SIGINT SIGTERM
 # 启动 vLLM 服务（后台运行，以便获取 PID）
 echo "运行成功的前提是已经下载了模型在Model文件中..."
 python -m vllm.entrypoints.openai.api_server \
-    --model  /amax/storage/qcjySONG/EHRSQL/FT_coldstart/FT_model/ALL_table_4B\ 
+    --model  ./MODEL/SQL_Dog_DPO\ 
     --dtype float16 \
     --tensor-parallel-size 1 \
     --port 8192 \

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Dog - 智能问数助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        .chat-message { animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .typing-indicator span { animation: bounce 1.4s infinite ease-in-out; }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        .log-entry { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-slate-900 text-white h-screen overflow-hidden">
+    <div class="h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <img src="/static/sql_dog_logo.jpg" alt="SQL Dog Logo" class="h-10 w-10 rounded-lg object-cover">
+                <div class="flex flex-col">
+                    <h1 class="text-lg font-semibold">SQL Dog</h1>
+                    <span class="text-slate-400 text-xs">智能问数助手</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <a href="https://www.modelscope.cn/models/GDUTSONG/SQL_Dog_DPO" target="_blank" class="text-sm text-blue-400 hover:text-blue-300">魔搭 ModelScope</a>
+                <a href="https://github.com/qcjySONG/SQL_dog" target="_blank" class="text-sm text-blue-400 hover:text-blue-300">GitHub</a>
+                <button onclick="newChat()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition">+ 新建对话</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex overflow-hidden">
+            <!-- Left Sidebar - History -->
+            <aside class="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
+                <div class="p-4 border-b border-slate-700">
+                    <h2 class="text-sm font-medium text-slate-400">历史对话</h2>
+                </div>
+                <div id="historyList" class="flex-1 overflow-y-auto p-2 space-y-1">
+                    <!-- History items populated by JS -->
+                </div>
+            </aside>
+
+            <!-- Center - Chat -->
+            <main class="flex-1 flex flex-col min-w-0">
+                <div id="chatContainer" class="flex-1 overflow-y-auto p-6 space-y-4">
+                    <div class="text-center text-slate-500 mt-20">
+                        <div class="text-4xl mb-4">🐕</div>
+                        <p>欢迎使用 SQL Dog 智能问数助手</p>
+                        <p class="text-sm mt-2">请在下方输入您的问题</p>
+                    </div>
+                </div>
+
+                <!-- Input Area -->
+                <div class="p-4 border-t border-slate-700 bg-slate-800">
+                    <div class="flex gap-3">
+                        <input id="messageInput" type="text" placeholder="输入你的问题，例如：统计各性别的患者数量"
+                            class="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition"
+                            onkeypress="if(event.key==='Enter')sendMessage()">
+                        <button onclick="sendMessage()" id="sendBtn"
+                            class="px-6 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition">发送</button>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Right Sidebar - Schema & Logs -->
+            <aside class="w-80 bg-slate-800 border-l border-slate-700 flex flex-col">
+                <!-- Schema -->
+                <div class="p-4 border-b border-slate-700">
+                    <h2 class="text-sm font-medium text-slate-400 mb-3">数据库 Schema</h2>
+                    <div id="schemaView" class="space-y-2 text-sm">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Progress -->
+                <div class="p-4 border-b border-slate-700">
+                    <h2 class="text-sm font-medium text-slate-400 mb-3">执行进度</h2>
+                    <div id="progressView" class="space-y-2">
+                        <div class="text-slate-500 text-sm">等待输入...</div>
+                    </div>
+                </div>
+
+                <!-- Logs -->
+                <div class="flex-1 p-4 overflow-hidden flex flex-col">
+                    <h2 class="text-sm font-medium text-slate-400 mb-3">执行日志</h2>
+                    <div id="logView" class="flex-1 overflow-y-auto bg-slate-900 rounded p-2 space-y-1">
+                        <div class="log-entry text-green-400">[SYSTEM] SQL Dog 启动成功</div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <script>
+        let currentConversationId = '';
+        let isProcessing = false;
+
+        function generateId() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function addLog(level, message) {
+            const time = new Date().toLocaleTimeString('zh-CN');
+            const logView = document.getElementById('logView');
+            const colorClass = level === 'ERROR' ? 'text-red-400' : level === 'WARN' ? 'text-yellow-400' : level === 'SUCCESS' ? 'text-green-400' : 'text-slate-400';
+            logView.innerHTML += `<div class="log-entry ${colorClass}">[${time}] [${level}] ${message}</div>`;
+            logView.scrollTop = logView.scrollHeight;
+        }
+
+        function loadHistory() {
+                fetch('http://10.21.76.239:7863/api/conversations')
+                .then(r => r.json())
+                .then(data => {
+                    const list = document.getElementById('historyList');
+                    list.innerHTML = '';
+                    (data.conversations || []).forEach(conv => {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 rounded hover:bg-slate-700 cursor-pointer text-sm truncate';
+                        div.textContent = conv.summary || '新对话';
+                        div.onclick = () => loadConversation(conv.id);
+                        list.appendChild(div);
+                    });
+                });
+        }
+
+        function loadSchema() {
+                fetch('http://10.21.76.239:7863/api/schema')
+                .then(r => r.json())
+                .then(data => {
+                    const view = document.getElementById('schemaView');
+                    view.innerHTML = '';
+                    for (const [table, cols] of Object.entries(data)) {
+                        view.innerHTML += `<div class="bg-slate-700 rounded p-2"><div class="font-medium text-blue-400">${table}</div><div class="text-slate-400 text-xs">${cols.join(', ')}</div></div>`;
+                    }
+                });
+        }
+
+        function newChat() {
+            currentConversationId = generateId();
+            document.getElementById('chatContainer').innerHTML = `
+                <div class="text-center text-slate-500 mt-20">
+                    <div class="text-4xl mb-4">🐕</div>
+                    <p>欢迎使用 SQL Dog 智能问数助手</p>
+                    <p class="text-sm mt-2">请在下方输入您的问题</p>
+                </div>`;
+            document.getElementById('progressView').innerHTML = '<div class="text-slate-500 text-sm">等待输入...</div>';
+            addLog('INFO', '新建对话');
+        }
+
+        function loadConversation(convId) {
+            fetch('http://10.21.76.239:7863/api/conversation/' + convId)
+                .then(r => r.json())
+                .then(data => {
+                    currentConversationId = convId;
+                    const container = document.getElementById('chatContainer');
+                    container.innerHTML = '';
+                    (data.history || []).forEach(turn => {
+                        container.innerHTML += `<div class="chat-message bg-slate-800 rounded-lg p-4"><div class="text-blue-400 text-sm mb-2">👤 用户</div><div>${turn.question}</div></div>`;
+                        if (turn.answer) {
+                            let html = `<div class="chat-message bg-slate-800 rounded-lg p-4 mt-2"><div class="text-green-400 text-sm mb-2">🤖 助手</div>`;
+                            if (turn.sql) html += `<pre class="bg-slate-900 p-2 rounded text-xs mb-2 overflow-x-auto"><code>${turn.sql}</code></pre>`;
+                            html += `<div>${turn.answer}</div></div>`;
+                            container.innerHTML += html;
+                        }
+                    });
+                    addLog('INFO', '历史对话已加载');
+                });
+        }
+
+        function updateProgress(step, data, timings) {
+            const view = document.getElementById('progressView');
+            let html = '';
+            if (timings) {
+                html += `<div class="text-sm"><span class="text-blue-400">意图识别:</span> ${timings.intent || 0}s</div>`;
+                html += `<div class="text-sm"><span class="text-blue-400">表选择:</span> ${timings.table || 0}s</div>`;
+                html += `<div class="text-sm"><span class="text-blue-400">SQL生成:</span> ${timings.sql || 0}s</div>`;
+                html += `<div class="text-sm font-medium mt-2"><span class="text-green-400">总耗时:</span> ${timings.total || 0}s</div>`;
+            } else if (step === 'intent_done') {
+                html = `<div class="text-slate-400 text-sm">意图: ${data.intent}</div>`;
+            } else if (step === 'table_done') {
+                html = `<div class="text-slate-400 text-sm">表: ${(data.tables || []).join(', ') || '全部'}</div>`;
+            } else if (step === 'sql_done') {
+                html = `<div class="text-green-400 text-sm">SQL生成完成</div>`;
+            }
+            view.innerHTML = html;
+        }
+
+        async function sendMessage() {
+            if (isProcessing) return;
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            isProcessing = true;
+            document.getElementById('sendBtn').disabled = true;
+            input.value = '';
+
+            const container = document.getElementById('chatContainer');
+            const userMsg = document.createElement('div');
+            userMsg.className = 'chat-message bg-slate-800 rounded-lg p-4';
+            userMsg.innerHTML = `<div class="text-blue-400 text-sm mb-2">👤 用户</div><div>${message}</div>`;
+            container.appendChild(userMsg);
+
+            const assistantMsg = document.createElement('div');
+            assistantMsg.className = 'chat-message bg-slate-800 rounded-lg p-4 mt-2';
+            assistantMsg.innerHTML = `<div class="text-green-400 text-sm mb-2">🤖 助手</div><div class="typing-indicator flex gap-1"><span class="w-2 h-2 bg-slate-400 rounded-full"></span><span class="w-2 h-2 bg-slate-400 rounded-full"></span><span class="w-2 h-2 bg-slate-400 rounded-full"></span></div>`;
+            container.appendChild(assistantMsg);
+            container.scrollTop = container.scrollHeight;
+
+            addLog('USER', '用户提问: ' + message.substring(0, 50));
+
+            try {
+                const response = await fetch('http://10.21.76.239:7863/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message, conversation_id: currentConversationId })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    assistantMsg.innerHTML = `<div class="text-green-400 text-sm mb-2">🤖 助手</div><div class="text-red-400">错误: ${data.error}</div>`;
+                    addLog('ERROR', data.error);
+                } else {
+                    currentConversationId = data.conversation_id;
+                    console.log('Response data:', data);
+                    let answerText = '';
+                    
+                    // 尝试从多个位置获取回答
+                    if (data.answer) {
+                        // 过滤掉思考过程
+                        let cleanAnswer = data.answer;
+                        if (cleanAnswer.includes('思考过程')) {
+                            const match = cleanAnswer.match(/<\/details>\s*\n\s*(.+)$/s);
+                            if (match) cleanAnswer = match[1].trim();
+                        }
+                        answerText = cleanAnswer;
+                    } else if (data.final_answer) {
+                        answerText = data.final_answer;
+                    } else if (data.history && data.history.length > 0) {
+                        const lastItem = data.history[data.history.length - 1];
+                        // 如果是 chat意图，从 history 获取 answer
+                        if (data.intent === 'chat') {
+                            answerText = lastItem.answer || '';
+                        } else {
+                            answerText = lastItem.answer || lastItem.final_answer || '';
+                        }
+                    }
+                    
+                    // 获取SQL - 只对 query 意图获取SQL，chat意图不显示SQL
+                    let thinkingText = '';
+                    let sqlText = '';
+                    let resultTable = '';
+                    
+                    if (data.intent === 'query') {
+                        sqlText = data.sql;
+                        if (!sqlText && data.history && data.history.length > 0) {
+                            sqlText = data.history[data.history.length - 1].sql;
+                        }
+                        
+                        // 提取思维链
+                        if (data.answer && data.answer.includes('<thinking>')) {
+                            const match = data.answer.match(/<thinking>(.*?)<\/thinking>/s);
+                            if (match) thinkingText = match[1];
+                        }
+                        
+                        // 格式化结果表格
+                        if (data.result && data.result.success && data.result.data && data.result.data.length > 0) {
+                            const cols = data.result.columns || Object.keys(data.result.data[0]);
+                            let tableHtml = '<div class="mt-3 overflow-x-auto"><table class="min-w-full text-xs border border-slate-600"><thead class="bg-slate-700"><tr>';
+                            cols.forEach(col => { tableHtml += `<th class="px-3 py-2 text-left text-slate-300">${col}</th>`; });
+                            tableHtml += '</tr></thead><tbody>';
+                            data.result.data.slice(0, 20).forEach(row => {
+                                tableHtml += '<tr class="border-t border-slate-700">';
+                                cols.forEach(col => { tableHtml += `<td class="px-3 py-2 text-slate-400">${row[col] !== null ? row[col] : ''}</td>`; });
+                                tableHtml += '</tr>';
+                            });
+                            if (data.result.data.length > 20) {
+                                tableHtml += `<tr class="border-t border-slate-700"><td colspan="${cols.length}" class="px-3 py-2 text-slate-500 text-center">... 还有 ${data.result.data.length - 20} 行</td></tr>`;
+                            }
+                            tableHtml += '</tbody></table></div>';
+                            resultTable = tableHtml;
+                        }
+                    }
+                    
+                    let html = `<div class="text-green-400 text-sm mb-2">🤖 助手</div>`;
+                    
+                    // 思考过程默认折叠，点击展开
+                    if (thinkingText) {
+                        html += `<div class="mb-2"><button onclick="this.nextElementSibling.classList.toggle('hidden')" class="text-xs text-blue-400 hover:text-blue-300 mb-1">▼ 思考过程</button><pre class="bg-slate-800 p-2 rounded text-xs text-slate-400 hidden whitespace-pre-wrap">${thinkingText}</pre></div>`;
+                    }
+                    
+                    // SQL 直接展示（从 API 获取的原始 SQL）
+                    if (sqlText) {
+                        html += `<pre class="bg-slate-900 p-2 rounded text-xs mb-2 overflow-x-auto"><code class="language-sql">${sqlText}</code></pre>`;
+                    }
+                    
+                    if (resultTable) {
+                        html += resultTable;
+                    }
+                    
+                    // 回答内容 - 移除 SQL 查询部分（避免重复），只保留自然语言回答
+                    if (answerText) {
+                        let cleanAnswer = answerText;
+                        // 移除 <thinking> 标签
+                        cleanAnswer = cleanAnswer.replace(/<thinking>.*?<\/thinking>/gs, '');
+                        // 移除 **SQL查询：** ... ```sql ... ```  部分
+                        cleanAnswer = cleanAnswer.replace(/\*\*SQL查询：\*\*[\s\S]*?```sql[\s\S]*?```/g, '');
+                        cleanAnswer = cleanAnswer.trim();
+                        if (cleanAnswer) {
+                            html += `<div class="mt-2 text-slate-300">${cleanAnswer}</div>`;
+                        }
+                    }
+                    assistantMsg.innerHTML = html;
+                    addLog('SUCCESS', '查询完成');
+
+                    if (data.timings) {
+                        updateProgress('done', {}, data.timings);
+                    }
+                }
+
+                container.scrollTop = container.scrollHeight;
+                loadHistory();
+            } catch (e) {
+                assistantMsg.innerHTML = `<div class="text-green-400 text-sm mb-2">🤖 助手</div><div class="text-red-400">请求失败: ${e.message}</div>`;
+                addLog('ERROR', e.message);
+            }
+
+            isProcessing = false;
+            document.getElementById('sendBtn').disabled = false;
+        }
+
+        // Init
+        loadHistory();
+        loadSchema();
+    </script>
+</body>
+</html>
