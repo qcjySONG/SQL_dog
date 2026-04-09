@@ -2,7 +2,6 @@
 ![Web介绍](../assets/Web.png)
 
 <p align="center">
-  <img src="assets/sql_dog_logo.jpg" alt="SQL Dog Logo" width="200" />
   <h1>SQL Dog - 智能问数助手</h1>
   <p>基于 DeepSeek 大语言模型的 Text-to-SQL 对话系统</p>
   <p>
