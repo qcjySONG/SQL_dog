@@ -1,4 +1,4 @@
-# SQL_Gog：从模型训练到产品搭建——迈向NL2SSQL第一步
+# SQL_Gog：从模型训练到产品搭建——迈向NL2SQL第一步
 ![SQL_Dog项目介绍](https://raw.githubusercontent.com/qcjySONG/SQL_dog/main/assets/ind.png)
 ## 介绍
 
