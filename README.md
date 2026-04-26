@@ -1,4 +1,19 @@
 # SQL_Gog：从模型训练到产品搭建——迈向NL2SQL第一步
+
+> Dear Editor,
+>
+> I hope this message finds you well. Regarding manuscript "TBDSI-2025-12-0908," I would like to formally express my disagreement with the current author order. As the second author (co-first author, listed second), I single-handedly completed all aspects of this work. Furthermore, I personally covered all associated expenses, including costs for data distillation and large language model API calls.
+>
+> However, upon receiving your revision request, I was surprised to discover that the listed first author is an individual I do not know, and I have no institutional affiliation or professional connection with them whatsoever. This situation constitutes academic misconduct. To safeguard the reputation of your esteemed journal, I respectfully recommend that this manuscript be rejected.
+>
+> Sincerely,  
+> Qibin
+
+
+
+
+
+
 ![SQL_Dog项目介绍](https://raw.githubusercontent.com/qcjySONG/SQL_dog/main/assets/ind.png)
 ## 介绍
 
